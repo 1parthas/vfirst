@@ -709,8 +709,20 @@ function HeroCinematicSection({
 }) {
   const desktopVideo = "/ts_1_scrub.mp4";
   const desktopFallbackVideo = "/ts_1.mp4";
-  const mobileVideo = "/ts_2_scrub.mp4";
-  const mobileFallbackVideo = "/ts_2.mp4";
+  const mobileVideo = desktopVideo;
+  const mobileFallbackVideo = desktopFallbackVideo;
+  const fallbackVideos = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          mobileVideo,
+          mobileFallbackVideo,
+          desktopVideo,
+          desktopFallbackVideo
+        ])
+      ),
+    [desktopFallbackVideo, desktopVideo, mobileFallbackVideo, mobileVideo]
+  );
   const heroRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const targetProgressRef = useRef(0);
@@ -895,12 +907,11 @@ function HeroCinematicSection({
             setVideoReady(true);
           }}
           onError={() => {
-            if (videoSrc === mobileVideo) {
-              setVideoSrc(mobileFallbackVideo);
-            } else if (videoSrc === mobileFallbackVideo) {
-              setVideoSrc(desktopVideo);
-            } else if (videoSrc === desktopVideo) {
-              setVideoSrc(desktopFallbackVideo);
+            const nextSource = fallbackVideos[fallbackVideos.indexOf(videoSrc) + 1];
+
+            if (nextSource) {
+              setVideoReady(false);
+              setVideoSrc(nextSource);
             } else {
               setVideoReady(true);
             }
