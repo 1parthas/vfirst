@@ -21,6 +21,7 @@ import {
   X
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -728,10 +729,99 @@ function HeroCinematicSection({
   const targetProgressRef = useRef(0);
   const smoothProgressRef = useRef(0);
   const copyVisibleRef = useRef(false);
+  const videoUnlockedRef = useRef(false);
+  const videoUnlockAttemptRef = useRef(false);
   const [videoSrc, setVideoSrc] = useState(desktopVideo);
   const [videoReady, setVideoReady] = useState(false);
   const [videoDuration, setVideoDuration] = useState(1);
   const [copyVisible, setCopyVisible] = useState(false);
+
+  const primeHeroVideo = useCallback(
+    (
+      targetTime = smoothProgressRef.current * Math.max(0.01, videoDuration),
+      forceGestureUnlock = false
+    ) => {
+      const video = videoRef.current;
+
+      if (!video) {
+        return;
+      }
+
+      const duration = Number.isFinite(video.duration)
+        ? video.duration
+        : videoDuration || 1;
+      const safeTime = Math.min(
+        Math.max(0.001, targetTime),
+        Math.max(0.001, duration - 0.001)
+      );
+      const seekToFrame = () => {
+        if (!Number.isFinite(safeTime)) {
+          return;
+        }
+
+        try {
+          video.currentTime = safeTime;
+        } catch {
+          // Some mobile browsers reject seeks until enough metadata is loaded.
+        }
+      };
+
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
+      video.setAttribute("playsinline", "true");
+      video.setAttribute("webkit-playsinline", "true");
+
+      if (videoUnlockedRef.current) {
+        seekToFrame();
+        return;
+      }
+
+      if (videoUnlockAttemptRef.current && !forceGestureUnlock) {
+        return;
+      }
+
+      videoUnlockAttemptRef.current = true;
+      const unlockTimeout = window.setTimeout(() => {
+        videoUnlockAttemptRef.current = false;
+        seekToFrame();
+      }, 900);
+
+      const finish = () => {
+        window.clearTimeout(unlockTimeout);
+        video.pause();
+        videoUnlockedRef.current = true;
+        videoUnlockAttemptRef.current = false;
+        seekToFrame();
+        setVideoReady(true);
+      };
+      const fail = () => {
+        window.clearTimeout(unlockTimeout);
+        videoUnlockAttemptRef.current = false;
+
+        try {
+          video.load();
+        } catch {
+          // Ignore load failures; the poster fallback remains visible.
+        }
+
+        seekToFrame();
+      };
+
+      try {
+        const playRequest = video.play();
+
+        if (playRequest && typeof playRequest.then === "function") {
+          void playRequest.then(finish).catch(fail);
+        } else {
+          finish();
+        }
+      } catch {
+        fail();
+      }
+    },
+    [videoDuration]
+  );
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 720px)");
@@ -741,6 +831,8 @@ function HeroCinematicSection({
       setVideoSrc((currentSource) => {
         if (currentSource !== nextSource) {
           setVideoReady(false);
+          videoUnlockedRef.current = false;
+          videoUnlockAttemptRef.current = false;
           smoothProgressRef.current = 0;
           targetProgressRef.current = 0;
           copyVisibleRef.current = false;
@@ -763,6 +855,22 @@ function HeroCinematicSection({
       media.removeEventListener("change", updateSource);
     };
   }, []);
+
+  useEffect(() => {
+    const unlock = () => {
+      primeHeroVideo(undefined, true);
+    };
+
+    window.addEventListener("touchstart", unlock, { passive: true });
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("scroll", unlock, { passive: true });
+
+    return () => {
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("scroll", unlock);
+    };
+  }, [primeHeroVideo, videoSrc]);
 
   useEffect(() => {
     const hero = heroRef.current;
@@ -813,8 +921,16 @@ function HeroCinematicSection({
         now - lastSeekAt > 28 &&
         Math.abs(video.currentTime - targetTime) > 0.018
       ) {
+        if (!videoUnlockedRef.current && targetTime > 0.001) {
+          primeHeroVideo(targetTime);
+        }
+
         lastSeekAt = now;
-        video.currentTime = targetTime;
+        try {
+          video.currentTime = targetTime;
+        } catch {
+          primeHeroVideo(targetTime);
+        }
       }
 
       if (
@@ -848,7 +964,7 @@ function HeroCinematicSection({
       window.removeEventListener("scroll", queue);
       window.removeEventListener("resize", queue);
     };
-  }, [videoDuration, videoReady, videoSrc]);
+  }, [primeHeroVideo, videoDuration, videoReady, videoSrc]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -894,23 +1010,32 @@ function HeroCinematicSection({
             const video = event.currentTarget;
 
             video.pause();
-            video.currentTime = 0;
+            try {
+              video.currentTime = 0;
+            } catch {
+              // Safari can reject early seeks before the video is fully primed.
+            }
             setVideoDuration(video.duration || 1);
             setVideoReady(true);
+            primeHeroVideo(0.001);
           }}
           onLoadedData={(event) => {
             event.currentTarget.pause();
             setVideoReady(true);
+            primeHeroVideo();
           }}
           onCanPlay={(event) => {
             event.currentTarget.pause();
             setVideoReady(true);
+            primeHeroVideo();
           }}
           onError={() => {
             const nextSource = fallbackVideos[fallbackVideos.indexOf(videoSrc) + 1];
 
             if (nextSource) {
               setVideoReady(false);
+              videoUnlockedRef.current = false;
+              videoUnlockAttemptRef.current = false;
               setVideoSrc(nextSource);
             } else {
               setVideoReady(true);
