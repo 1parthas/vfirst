@@ -1,10 +1,32 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+const siteUrl = new URL("https://vfirst-pi.vercel.app");
+const title = "VFirst - Pure, Natural, Hygienic Spices";
+const description =
+  "Premium VFirst natural products and fresh spice blends, packed for pure, hygienic everyday cooking.";
+
 export const metadata: Metadata = {
-  title: "VFirst - Premium Natural Products",
-  description:
-    "An immersive VFirst shopping experience for pure, natural, hygienic spices and pantry products.",
+  metadataBase: siteUrl,
+  title,
+  description,
+  applicationName: "VFirst",
+  alternates: {
+    canonical: "/"
+  },
+  openGraph: {
+    title,
+    description,
+    url: "/",
+    siteName: "VFirst",
+    locale: "en_IN",
+    type: "website"
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description
+  },
   icons: {
     icon: "https://vfirstindia.com/vfirst-logo.png"
   }
