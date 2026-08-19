@@ -467,12 +467,12 @@ export default function Storefront({
     setCartOpen(false);
     setOrderPlacedOpen(true);
     window.localStorage.removeItem("vfirst_cart");
+  }
 
-    window.setTimeout(() => {
-      setOrderPlacedOpen(false);
-      window.location.hash = "home";
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 3600);
+  function finishOrderFlow() {
+    setOrderPlacedOpen(false);
+    window.location.hash = "home";
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
@@ -487,7 +487,6 @@ export default function Storefront({
 
       <HeroCinematicSection
         placedOrder={placedOrder}
-        onLogin={() => setLoginOpen(true)}
       />
 
       <section className="trust-strip" aria-label="VFirst promises">
@@ -656,7 +655,9 @@ export default function Storefront({
         />
       ) : null}
 
-      {orderPlacedOpen ? <OrderPlacedModal items={placedOrder} /> : null}
+      {orderPlacedOpen ? (
+        <OrderPlacedModal items={placedOrder} onComplete={finishOrderFlow} />
+      ) : null}
     </main>
   );
 }
@@ -702,11 +703,9 @@ function Header({
 }
 
 function HeroCinematicSection({
-  placedOrder,
-  onLogin
+  placedOrder
 }: {
   placedOrder: CartItem[];
-  onLogin: () => void;
 }) {
   const desktopVideo = "/ts_1_scrub.mp4";
   const desktopFallbackVideo = "/ts_1.mp4";
@@ -918,23 +917,17 @@ function HeroCinematicSection({
           <strong>Preparing fresh batches</strong>
         </div>
 
-        <div className="video-hero-content">
-          <div className="eyebrow">
-            <Leaf size={16} />
-            VFirst Fresh & Natural
-          </div>
-          <h1>VFirst</h1>
-          <p className="hero-lede">From whole spice to fresh VFirst pack.</p>
-          <div className="hero-actions">
-            <a className="primary-action" href="#shop">
-              Shop live catalogue
-              <ChevronRight size={18} />
-            </a>
-            <button className="ghost-action" onClick={onLogin}>
-              <User size={18} />
-              Login
-            </button>
-          </div>
+        <div className="video-hero-content hero-final-lockup">
+          <img
+            className="hero-final-logo"
+            src={brandAssets.logo}
+            alt="VFirst Fresh & Natural"
+            draggable={false}
+          />
+          <p className="hero-final-title">Pure. Natural. Hygienic.</p>
+          <p className="hero-final-subtitle">
+            Premium natural products, hygienic and pure
+          </p>
           {placedOrder.length ? <PlacedOrderRibbon items={placedOrder} /> : null}
         </div>
 
@@ -1544,29 +1537,48 @@ function PlacedOrderRibbon({ items }: { items: CartItem[] }) {
   );
 }
 
-function OrderPlacedModal({ items }: { items: CartItem[] }) {
+function OrderPlacedModal({
+  items,
+  onComplete
+}: {
+  items: CartItem[];
+  onComplete: () => void;
+}) {
+  const [videoComplete, setVideoComplete] = useState(false);
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const featuredItem = items[0];
+
+  useEffect(() => {
+    if (!videoComplete) {
+      return;
+    }
+
+    const timer = window.setTimeout(onComplete, 1500);
+
+    return () => window.clearTimeout(timer);
+  }, [onComplete, videoComplete]);
 
   return (
     <div className="modal order-placed">
       <div className="modal-scrim" aria-hidden="true" />
-      <div className="order-card" role="status" aria-live="polite">
-        <div className="order-animation" aria-hidden="true">
-          <div className="order-road" />
-          <div className="order-truck">
-            <div className="truck-cabin" />
-            <div className="truck-box" />
-            <span className="wheel front" />
-            <span className="wheel back" />
-          </div>
-          <div className="order-plant">
-            <span className="stem" />
-            <span className="leaf left" />
-            <span className="leaf right" />
-          </div>
-          <div className="order-check">
-            <Check size={34} />
+      <div
+        className={`order-card ${videoComplete ? "video-complete" : ""}`}
+        role="status"
+        aria-live="polite"
+      >
+        <div className="order-animation">
+          <video
+            src="/order_placed.mp4"
+            autoPlay
+            muted
+            playsInline
+            preload="auto"
+            aria-label="Order placed animation"
+            onEnded={() => setVideoComplete(true)}
+            onError={() => setVideoComplete(true)}
+          />
+          <div className="order-video-check" aria-hidden={!videoComplete}>
+            <Check size={42} />
           </div>
         </div>
         <p className="eyebrow dark">Order placed</p>
