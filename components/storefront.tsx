@@ -84,6 +84,7 @@ const brandAssets = {
 };
 
 const localFallbackArt = "/vfirst-surreal-spice-panorama.png";
+const heroPosterArt = "/ts_1_poster.jpg";
 
 const surrealStages = [
   brandAssets.forest,
@@ -738,8 +739,7 @@ function HeroCinematicSection({
 
   const primeHeroVideo = useCallback(
     (
-      targetTime = smoothProgressRef.current * Math.max(0.01, videoDuration),
-      forceGestureUnlock = false
+      targetTime = smoothProgressRef.current * Math.max(0.01, videoDuration)
     ) => {
       const video = videoRef.current;
 
@@ -773,11 +773,10 @@ function HeroCinematicSection({
       video.setAttribute("webkit-playsinline", "true");
 
       if (videoUnlockedRef.current) {
-        seekToFrame();
         return;
       }
 
-      if (videoUnlockAttemptRef.current && !forceGestureUnlock) {
+      if (videoUnlockAttemptRef.current) {
         return;
       }
 
@@ -798,13 +797,6 @@ function HeroCinematicSection({
       const fail = () => {
         window.clearTimeout(unlockTimeout);
         videoUnlockAttemptRef.current = false;
-
-        try {
-          video.load();
-        } catch {
-          // Ignore load failures; the poster fallback remains visible.
-        }
-
         seekToFrame();
       };
 
@@ -858,17 +850,15 @@ function HeroCinematicSection({
 
   useEffect(() => {
     const unlock = () => {
-      primeHeroVideo(undefined, true);
+      primeHeroVideo();
     };
 
     window.addEventListener("touchstart", unlock, { passive: true });
     window.addEventListener("pointerdown", unlock, { passive: true });
-    window.addEventListener("scroll", unlock, { passive: true });
 
     return () => {
       window.removeEventListener("touchstart", unlock);
       window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("scroll", unlock);
     };
   }, [primeHeroVideo, videoSrc]);
 
@@ -921,15 +911,11 @@ function HeroCinematicSection({
         now - lastSeekAt > 28 &&
         Math.abs(video.currentTime - targetTime) > 0.018
       ) {
-        if (!videoUnlockedRef.current && targetTime > 0.001) {
-          primeHeroVideo(targetTime);
-        }
-
         lastSeekAt = now;
         try {
           video.currentTime = targetTime;
         } catch {
-          primeHeroVideo(targetTime);
+          // The gesture unlock path will retry on mobile browsers that reject early seeks.
         }
       }
 
@@ -1002,7 +988,7 @@ function HeroCinematicSection({
           ref={videoRef}
           className="video-hero-media"
           src={videoSrc}
-          poster={localFallbackArt}
+          poster={heroPosterArt}
           muted
           playsInline
           preload="auto"
@@ -1010,6 +996,11 @@ function HeroCinematicSection({
             const video = event.currentTarget;
 
             video.pause();
+            video.muted = true;
+            video.defaultMuted = true;
+            video.playsInline = true;
+            video.setAttribute("playsinline", "true");
+            video.setAttribute("webkit-playsinline", "true");
             try {
               video.currentTime = 0;
             } catch {
@@ -1017,17 +1008,14 @@ function HeroCinematicSection({
             }
             setVideoDuration(video.duration || 1);
             setVideoReady(true);
-            primeHeroVideo(0.001);
           }}
           onLoadedData={(event) => {
             event.currentTarget.pause();
             setVideoReady(true);
-            primeHeroVideo();
           }}
           onCanPlay={(event) => {
             event.currentTarget.pause();
             setVideoReady(true);
-            primeHeroVideo();
           }}
           onError={() => {
             const nextSource = fallbackVideos[fallbackVideos.indexOf(videoSrc) + 1];
